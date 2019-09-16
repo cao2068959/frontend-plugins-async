@@ -4,6 +4,10 @@
 
 > 本项目是改造frontend-plugins 插件，用于可以异步化前端打包流程，插件原地址 https://github.com/eirslett/frontend-maven-plugin
 
+## 安装
+> mvn install 
+
+
 ## 基本流程
 本插件可以把整个插件的执行流程给异步化，脱离maven生命周期的同步化。
 
