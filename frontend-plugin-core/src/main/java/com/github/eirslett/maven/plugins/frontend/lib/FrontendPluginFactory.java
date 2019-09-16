@@ -7,7 +7,7 @@ public final class FrontendPluginFactory {
     private static final Platform defaultPlatform = Platform.guess();
     private static final String DEFAULT_CACHE_PATH = "cache";
 
-    private final File workingDirectory;
+    public final File workingDirectory;
     private final File installDirectory;
     private final CacheResolver cacheResolver;
 

@@ -2,7 +2,11 @@ package com.github.eirslett.maven.plugins.frontend.mojo;
 
 import java.io.File;
 import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
+import com.github.eirslett.maven.plugins.frontend.lib.*;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoFailureException;
@@ -11,9 +15,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystemSession;
 
-import com.github.eirslett.maven.plugins.frontend.lib.FrontendException;
-import com.github.eirslett.maven.plugins.frontend.lib.FrontendPluginFactory;
-import com.github.eirslett.maven.plugins.frontend.lib.TaskRunnerException;
+import sun.nio.ch.ThreadPool;
 
 public abstract class AbstractFrontendMojo extends AbstractMojo {
 
@@ -60,6 +62,23 @@ public abstract class AbstractFrontendMojo extends AbstractMojo {
     private RepositorySystemSession repositorySystemSession;
 
     /**
+     * 开启异步
+     */
+    @Parameter(property = "async",defaultValue = "fasle")
+    private boolean async;
+
+    /**
+     * 如果被设置了是最后一个任务，当这个任务执行完成后，将会唤醒在主流程上阻塞的线程,然后设置异步任务的结果是成功
+     */
+    @Parameter(property = "lastTask",defaultValue = "fasle")
+    private boolean lastTask;
+
+
+
+
+
+
+    /**
      * Determines if this execution should be skipped.
      */
     private boolean skipTestPhase() {
@@ -91,7 +110,8 @@ public abstract class AbstractFrontendMojo extends AbstractMojo {
                 installDirectory = workingDirectory;
             }
             try {
-                execute(new FrontendPluginFactory(workingDirectory, installDirectory,
+                initAsyncTask();
+                executeRouter(new FrontendPluginFactory(workingDirectory, installDirectory,
                         new RepositoryCacheResolver(repositorySystemSession)));
             } catch (TaskRunnerException e) {
                 if (testFailureIgnore && isTestingPhase()) {
@@ -106,5 +126,74 @@ public abstract class AbstractFrontendMojo extends AbstractMojo {
             getLog().info("Skipping execution.");
         }
     }
+
+
+
+
+    /**
+     * 如果设置了 asyn=true，并且是第一次进入这个方法才会创建线程池,以及异步任务的结果对象
+     * 该线程池是单线程线程池，保证线程池中的任务按照顺序执行
+     */
+    private void initAsyncTask(){
+        if(!async){
+            return;
+        }
+
+        if(Global.threadPoolExecutor != null && Global.asyncExecuteResult !=null){
+            return;
+        }
+
+        Global.asyncExecuteResult = new AsyncExecuteResult();
+        Global.threadPoolExecutor = new ThreadPoolExecutor(1,1,5, TimeUnit.MINUTES,
+                new LinkedBlockingQueue<>());
+    }
+
+
+
+    protected  void executeRouter(FrontendPluginFactory frontendPluginFactory) throws FrontendException {
+        if(!async){
+            execute(new FrontendPluginFactory(workingDirectory, installDirectory,
+                    new RepositoryCacheResolver(repositorySystemSession)));
+            return;
+        }
+
+        Global.threadPoolExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if(Global.asyncExecuteResult.isNoStart()){
+                        Global.asyncExecuteResult.setStatus(AsyncExecuteResult.STATUS_CONINUE);
+                    }
+                    execute(new FrontendPluginFactory(workingDirectory, installDirectory,
+                            new RepositoryCacheResolver(repositorySystemSession)));
+
+                    if(lastTask){
+                        synchronized (Global.asyncExecuteResult){
+                            Global.asyncExecuteResult.setStatus(AsyncExecuteResult.STATUS_FINISH);
+                            Global.asyncExecuteResult.setSuccess(true);
+                            Global.asyncExecuteResult.notifyAll();
+                        }
+                    }
+
+                } catch (Exception e) {
+                    //e.printStackTrace();
+                    Global.threadPoolExecutor.shutdownNow();
+                    synchronized (Global.asyncExecuteResult){
+                        Global.asyncExecuteResult.setStatus(AsyncExecuteResult.STATUS_EXCEPTION);
+                        Global.asyncExecuteResult.setSuccess(false);
+                        Global.asyncExecuteResult.setExceptionMsg(e.getMessage());
+                        Global.asyncExecuteResult.setThrowable(e.getCause());
+                        Global.asyncExecuteResult.notifyAll();
+                    }
+                }
+            }
+        });
+
+    }
+
+
+
+
+
 
 }

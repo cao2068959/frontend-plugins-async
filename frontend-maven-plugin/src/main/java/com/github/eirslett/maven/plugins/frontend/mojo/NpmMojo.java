@@ -33,7 +33,7 @@ public final class NpmMojo extends AbstractFrontendMojo {
      */
     @Parameter(property = NPM_REGISTRY_URL, required = false, defaultValue = "")
     private String npmRegistryURL;
-    
+
     @Parameter(property = "session", defaultValue = "${session}", readonly = true)
     private MavenSession session;
 
@@ -42,6 +42,8 @@ public final class NpmMojo extends AbstractFrontendMojo {
 
     @Component(role = SettingsDecrypter.class)
     private SettingsDecrypter decrypter;
+
+
 
     /**
      * Skips execution of this mojo.

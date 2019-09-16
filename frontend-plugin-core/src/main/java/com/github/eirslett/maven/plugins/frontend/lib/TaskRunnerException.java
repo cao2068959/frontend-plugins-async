@@ -5,7 +5,7 @@ public class TaskRunnerException extends FrontendException {
         super(message);
     }
 
-    TaskRunnerException(String message, Throwable cause){
+    public TaskRunnerException(String message, Throwable cause){
         super(message, cause);
     }
 }

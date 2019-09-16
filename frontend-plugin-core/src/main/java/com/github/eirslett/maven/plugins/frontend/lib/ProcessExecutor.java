@@ -61,7 +61,9 @@ final class ProcessExecutor {
 
     public int executeAndRedirectOutput(final Logger logger) throws ProcessExecutionException {
         OutputStream stdout = new LoggerOutputStream(logger, 0);
-        return execute(logger, stdout, stdout);
+        OutputStream errorStdout = new LoggerOutputStreamError(logger,0);
+
+        return execute(logger, stdout, errorStdout);
     }
 
     private int execute(final Logger logger, final OutputStream stdout, final OutputStream stderr)
@@ -158,6 +160,30 @@ final class ProcessExecutor {
         @Override
         protected void processLine(final String line, final int logLevel) {
             logger.info(line);
+        }
+    }
+
+    private static class LoggerOutputStreamError extends LogOutputStream {
+        private final Logger logger;
+
+        LoggerOutputStreamError(Logger logger, int logLevel) {
+            super(logLevel);
+            this.logger = logger;
+        }
+
+        @Override
+        public final void flush() {
+            // buffer processing on close() only
+        }
+
+        @Override
+        protected void processLine(final String line, final int logLevel) {
+
+            if(Global.asyncExecuteResult == null){
+                logger.error(line);
+            }else{
+                Global.asyncExecuteResult.addError(line);
+            }
         }
     }
 }
